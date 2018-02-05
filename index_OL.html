@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Weather Data Viewer</title>
+    <link rel="stylesheet" href="https://openlayers.org/en/v4.6.4/css/ol.css" type="text/css">
+    <!-- The line below is only needed for old environments like Internet Explorer and Android 4.x -->
+    <script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=requestAnimationFrame,Element.prototype.classList,URL"></script>
+    <script src="https://openlayers.org/en/v4.6.4/build/ol.js"></script>
+	
+	<script src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.2.1.min.js"></script>
+	<script>
+		var startDate = null;
+		var frameRate = 0.333333; // frames per second
+		var animationId = null;
+		
+		var layers, map, jsonObj;
+			  
+		function initMap() {
+		  layers = [
+			new ol.layer.Tile({
+			  source: new ol.source.OSM()
+			}),
+			new ol.layer.Tile({
+			  source: new ol.source.TileWMS({
+				url: '../../geoserver/wms',
+				params: {'LAYERS': 'fdi:GFDI_SFC', 'TILED': true},
+				serverType: 'geoserver',
+				// Countries have transparency, so do not fade tiles:
+				transition: 0
+			  })
+			})
+		  ];
+		  map = new ol.Map({
+			layers: layers,
+			target: 'map',
+			view: new ol.View({
+			  center: [16100000, -4450000],
+			  zoom: 7
+			})
+		  })		  
+		};
+		
+		function updateInfo() {
+			var el = document.getElementById('info');
+			el.innerHTML = "UTC Date & Time: " + startDate.toISOString() + ". Local Date & Time: " + startDate.toLocaleString();
+		}
+
+		function setTime() {
+			startDate.setHours(startDate.getHours() + 1);
+			layers[1].getSource().updateParams({'TIME': startDate.toISOString()});
+			updateInfo();
+		}
+			
+		$(document).ready(function() {
+			initMap();
+			
+			//
+			
+			
+			  
+			  
+		var stop = function() {
+			if (animationId !== null) {
+				  window.clearInterval(animationId);
+				  animationId = null;
+			}
+		};
+
+		var play = function() {
+			stop();
+			animationId = window.setInterval(setTime, 1000 / frameRate);
+		};
+			  
+		var startButton = document.getElementById('play');
+		startButton.addEventListener('click', play, false);
+
+		var stopButton = document.getElementById('pause');
+		stopButton.addEventListener('click', stop, false);
+			  
+			
+
+			  
+			//
+			
+			/*
+			$.ajax({
+				type: "GET",
+				url: "../../geoserver/fdi/wms?service=WMS&version=1.1.0&request=GetCapabilities",
+				dataType: "xml",
+				success: function(xml){
+					$(xml).find('Extent').each(function(){
+						defaultTime = $(this).attr('default');
+						startDate = new Date(defaultTime);
+						updateInfo();
+					});
+				},
+				error: function(xhr, status, error) {
+					var err = eval("(" + xhr.responseText + ")");
+					alert(err.Message);
+				}
+			});
+			*/
+			
+			
+
+			fetchWMSCapabilities();
+		});
+		
+		function fetchWMSCapabilities() {
+			var parser = new ol.format.WMSCapabilities();
+			  fetch('../../geoserver/fdi/wms?service=WMS&request=GetCapabilities').then(function(response) {
+				return response.text();
+			  }).then(function(text) {
+				var result = parser.read(text);
+				//console.log(result);
+				//document.getElementById('log').innerText = JSON.stringify(result, null, 2);
+				jsonObj = JSON.parse(JSON.stringify(result));
+				console.log(jsonObj);
+				lyrArr = jsonObj["Capability"]["Layer"]["Layer"];
+				
+				jQuery.each( lyrArr, function( i, lyr ) {
+					if (lyrName = lyr["Name"] == "GFDI_SFC") {
+						if (lyr["Dimension"] !== undefined)
+							var dimensionArr = lyr["Dimension"];
+							jQuery.each( dimensionArr, function( i, dimension ) {
+								if (dimension["name"] == "time") {
+									var defaultTime = dimension["default"];
+									startDate = new Date(defaultTime);
+																	
+									// "time" values: e.g. values: "2018-01-09T19:00:00.000Z/2018-01-16T12:00:00.000Z/PT1H"
+									var timeValues = dimension["values"];
+									var endDate = timeValues.split("/")[1];
+									var periodicity = timeValues.split("/")[2];				// "PT1H"
+									var p_hour  = periodicity.match("T(.*)H")[1];			// "1"
+									
+									var dtStart = new Date(timeValues.split("/")[0]);
+									var dtEnd = new Date(timeValues.split("/")[1]);
+									
+									// Append the first option
+									$('#dateTimeList').append($('<option/>', {
+										value: dtStart.toISOString(),
+										text : dtStart.toLocaleString()
+									}));
+	
+									//var nextDT = dtStart.setHours(dtStart.getHours() + 1);
+									var nextDT = new Date();
+									nextDT.setTime(dtStart.getTime() + (1*60*60*1000));
+									
+									while (nextDT <= dtEnd) {
+										// Append options based on one hour interval between dtStart and dtEnd date objects
+										$('#dateTimeList').append($('<option/>', {
+											value: nextDT.toISOString(),
+											text : nextDT.toLocaleString()
+										}));
+										nextDT.setTime(nextDT.getTime() + (1*60*60*1000));
+									}
+									
+									updateInfo();
+									
+									$("#dateTimeList").change(function () {
+										var str = "";
+										$( "#dateTimeList option:selected" ).each(function() {
+											selectedDateTimeStamp = $( this ).val();
+											layers[1].getSource().updateParams({'TIME': selectedDateTimeStamp});
+											startDate = new Date(selectedDateTimeStamp);
+											updateInfo();
+										});
+									  });
+								}
+							});
+					}
+				});
+			  });
+		
+		}
+    </script>
+  </head>
+  <body>
+	<div role="group" aria-label="Animation controls">
+		<button id="play" type="button">Play</button>
+		<button id="pause" type="button">Pause</button>
+		<span id="info"></span>
+		<select name="dateTimeList" id='dateTimeList'>
+		</select>
+    </div>
+	<div id="map" class="map">
+	</div>
+  </body>
+</html>

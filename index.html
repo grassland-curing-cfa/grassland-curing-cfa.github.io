@@ -1,1 +1,453 @@
-"Hello World" 
+<html>
+    <head>
+        <title>Weather Forecast Data Viewer</title>
+		<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" />
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.2.0/leaflet.css" />
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.fullscreen/1.4.2/Control.FullScreen.min.css" />
+        <link rel="stylesheet" href="https://cdn.rawgit.com/socib/Leaflet.TimeDimension/master/dist/leaflet.timedimension.control.min.css" />
+		<link rel="stylesheet" href="css/leaflet.groupedlayercontrol.css" />
+		<link rel="stylesheet" href="css/lobipanel.css"/>
+		<style>
+		  .label {
+			font-weight: 700;
+			text-transform: uppercase;
+			text-align: center;
+			margin-top: -1em;
+		  }
+
+		  .label div {
+			position: relative;
+			left: -50%;
+			text-shadow: 0px 2px 1px rgba(255,255,255,0.85);
+		  }
+		</style>
+		<script type="text/javascript" src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.2.1.min.js"></script>
+		<script type="text/javascript" src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+		<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.2.0/leaflet.js"></script>
+		<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.fullscreen/1.4.2/Control.FullScreen.min.js"></script>
+        <script type="text/javascript" src="https://cdn.rawgit.com/nezasa/iso8601-js-period/master/iso8601.min.js"></script>
+        <script type="text/javascript" src="https://cdn.rawgit.com/socib/Leaflet.TimeDimension/master/dist/leaflet.timedimension.min.js"></script>
+		<!-- Load Esri Leaflet from CDN -->
+
+		<script src="https://unpkg.com/esri-leaflet@2.1.2/dist/esri-leaflet.js" integrity="sha512-ouokQ1RIIoqPTZKwlapdxHO5VWFoAi8wE+SwhSX89Ifac0w3p+H2da4oqHvRsBTIpNLewzAZU7gRVDFXyXcfjA==" crossorigin=""></script>
+		<!-- Load Esri Leaflet Renderers from CDN -->
+		<script src="https://unpkg.com/esri-leaflet-renderers@2.0.2/dist/esri-leaflet-renderers.js"></script>
+		<!-- BetterWMS plugin for GetFeatureInfo feature -->
+		<script src="js/L.TileLayer.BetterWMS.js"></script>
+		<script src="js/leaflet.groupedlayercontrol.js"></script>
+		<script src="js/lobipanel.js"></script>
+		<script type="text/javascript">
+		
+			// Add method to layer control class
+			L.Control.Layers.include({
+				getActiveOverlays: function () {
+
+					// Create array for holding active layers
+					var active = [];
+
+					// Iterate all layers in control
+					this._layers.forEach(function (obj) {
+						console.log(obj.overlay);
+						console.log(obj.name);
+						// Check if it's an overlay and added to the map
+						if (obj.overlay && obj.layer._map != undefined && obj.layer._map.hasLayer(obj.layer)) {
+
+							// Push layer to active array
+							active.push(obj.layer);
+						}
+					});
+
+					// Return array
+					return active;
+				}
+			});
+
+
+
+			var map;
+			var layerControl1, timeDimensionCtrl, groupedLayerControl;
+			
+			$(document).ready(function() {
+				var OpenStreetMap_Mapnik = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+					maxZoom: 19,
+					attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+				});
+				var OpenTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+					maxZoom: 17,
+					attribution: 'Map data: &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+				});
+				var Esri_WorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+					attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+				});
+				var Esri_WorldTopoMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+					attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community'
+				});	
+				
+				// Initialise the map object
+				map = L.map('map', {
+					zoom: 7,
+					center: [-36.2, 144.5],
+					layers: [OpenStreetMap_Mapnik],
+					fullscreenControl: true,
+					timeDimension: true
+				});
+				
+				timeDimensionCtrl = L.control.timeDimension({
+					position: 'bottomleft',
+					autoPlay: false,
+					minSpeed: 0.5,
+					maxSpeed: 3,
+					loopButton: true,
+					playerOptions: {
+						//buffer: 10,
+						transitionTime: 1000,
+						loop: true,
+					}
+				});
+				//timeDimensionCtrl.addTo(map);
+
+				var wmsUrl = "../../geoserver/wms";
+				
+				var idv71122_vic_gfdi_wms_layer_not_td = L.tileLayer.betterWms(wmsUrl, {
+					layers: 'fdi:IDV71122_VIC_GFDI_SFC',
+					format: 'image/png',
+					transparent: true,
+					crs: L.CRS.EPSG4326,
+					attribution: 'CFA | idv71122_vic_gfdi_wms_layer_not_td'
+				});
+				
+				var idv71122_vic_gfdi_wms_layer = L.tileLayer.wms(wmsUrl, {
+					layers: 'fdi:IDV71122_VIC_GFDI_SFC',
+					format: 'image/png',
+					transparent: true,
+					crs: L.CRS.EPSG4326,
+					attribution: 'CFA | IDV71122_VIC_GFDI_SFC'
+				});
+				var idv71116_vic_maxfdi_wms_layer = L.tileLayer.wms(wmsUrl, {
+					layers: 'fdi:IDV71116_VIC_MaxFDI_SFC',
+					format: 'image/png',
+					transparent: true,
+					crs: L.CRS.EPSG4326,
+					attribution: 'CFA | IDV71116_VIC_MaxFDI_SFC'
+				});
+				var idv71123_vic_maxgfdi_wms_layer = L.tileLayer.betterWms(wmsUrl, {
+					layers: 'fdi:IDV71123_VIC_MaxGFDI_SFC',
+					format: 'image/png',
+					transparent: true,
+					crs: L.CRS.EPSG4326,
+					attribution: 'CFA | IDV71123_VIC_MaxGFDI_SFC'
+				});
+				var idv71118_vic_maxffdi_wms_layer = L.tileLayer.betterWms(wmsUrl, {
+					layers: 'fdi:IDV71118_VIC_MaxFFDI_SFC',
+					format: 'image/png',
+					transparent: true,
+					crs: L.CRS.EPSG4326,
+					attribution: 'CFA | IDV71118_VIC_MaxFFDI_SFC'
+				});
+
+				// Create and add a TimeDimension Layer to the map
+				var idv71122_vic_gfdi_td_layer = L.timeDimension.layer.wms(idv71122_vic_gfdi_wms_layer, {
+					updateTimeDimension: true,
+					updateTimeDimensionMode: "replace",
+					requestTimeFromCapabilities: true
+				});
+				var idv71116_vic_maxfdi_td_layer = L.timeDimension.layer.wms(idv71116_vic_maxfdi_wms_layer, {
+					updateTimeDimension: true,
+					updateTimeDimensionMode: "replace",
+					requestTimeFromCapabilities: true
+				});
+				var idv71123_vic_maxgfdi_td_layer = L.timeDimension.layer.wms(idv71123_vic_maxgfdi_wms_layer, {
+					updateTimeDimension: true,
+					updateTimeDimensionMode: "replace",
+					requestTimeFromCapabilities: true
+				});
+				var idv71118_vic_maxffdi_td_layer = L.timeDimension.layer.wms(idv71118_vic_maxffdi_wms_layer, {
+					updateTimeDimension: true,
+					updateTimeDimensionMode: "replace",
+					requestTimeFromCapabilities: true
+				});
+				//tdWmsLayer.addTo(map);
+				
+				
+				// CFA DATA - BEGIN
+				var CFA_CuringMap_AGOL = L.esri.tiledMapLayer({
+					url: "https://tiles.arcgis.com/tiles/RylLPiI61AyfENce/arcgis/rest/services/VISCAmap_eMap_3857_GM_LOD/MapServer"
+				});
+				var CFA_CuringMap_AGOL_2 = L.tileLayer('https://tiles.arcgis.com/tiles/RylLPiI61AyfENce/arcgis/rest/services/VISCAmap_eMap_3857_GM_LOD/MapServer/tile/{z}/{x}/{y}', {
+					tms: true,
+					attribution: 'CFA | VISCAmap_eMap_3857_GM_LOD'
+				});
+				var CFA_CuringMap_not_td = L.tileLayer.betterWms(wmsUrl, {
+					layers: 'gc:VISCA4eMapVG94',
+					format: 'image/png',
+					transparent: true,
+					crs: L.CRS.EPSG3111,
+					attribution: 'CFA | VISCA4eMapVG94'
+				});
+				var CFA_BOM_DIST = L.esri.featureLayer({
+					url: 'https://services.arcgis.com/RylLPiI61AyfENce/arcgis/rest/services/BOM_Districts/FeatureServer/0'
+				});
+				
+				// CFA DATA - END
+				
+				// ADD LABELS - BEGIN
+				
+				var labels = {};
+
+				  CFA_BOM_DIST.on('createfeature', function(e){
+					var id = e.feature.id;
+					var feature = CFA_BOM_DIST.getFeature(id);
+					var center = feature.getBounds().getCenter();
+					var label = L.marker(center, {
+					  icon: L.divIcon({
+						iconSize: null,
+						className: 'label',
+						html: '<div>' + e.feature.properties.DIST_NAME + '</div>'
+					  })
+					}).addTo(map);
+					labels[id] = label;
+				  });
+
+				  CFA_BOM_DIST.on('addfeature', function(e){
+					var label = labels[e.feature.id];
+					if(label){
+					  label.addTo(map);
+					}
+				  });
+
+				  CFA_BOM_DIST.on('removefeature', function(e){
+					var label = labels[e.feature.id];
+					if(label){
+					  map.removeLayer(label);
+					}
+				  });
+				
+				// ADD LABELS - FINISH
+				
+				var baseLayers = {
+					"OpenStreetMap Street": OpenStreetMap_Mapnik,
+					"OpenStreetMap Topo": OpenTopoMap,
+					"Esri World Imagery": Esri_WorldImagery,
+					'Esri World Topo': Esri_WorldTopoMap
+				};
+				
+				var overlayMaps1 = {
+					'<span>Curing</span>': CFA_CuringMap_not_td,
+					"<span>GFDI hourly</span>": idv71122_vic_gfdi_td_layer,
+					"<span>MaxFDI daily</span>": idv71116_vic_maxfdi_td_layer,
+					"<span>MaxGFDI daily</span>": idv71123_vic_maxgfdi_td_layer,
+					"<span>MaxFFDI daily</span>": idv71118_vic_maxffdi_td_layer
+				}
+				
+				var overlayMaps2 = {
+					'<span>BOM District</span>': CFA_BOM_DIST,
+					'<span>idv71122_vic_gfdi_wms_layer_not_td</span>': idv71122_vic_gfdi_wms_layer_not_td,
+					"<span>CFA_CuringMap_AGOL</span>": CFA_CuringMap_AGOL,
+					"<span>CFA_CuringMap_AGOL_2</span>": CFA_CuringMap_AGOL_2
+				}
+				
+				// ADD LAYER SWITCHER CONTROL
+				//L.control.layers(baseLayers).addTo(map);
+				//layerControl1 = L.control.layers({}, overlayMaps1, {collapsed: false});
+				//layerControl1.addTo(map);
+				
+				//L.control.layers({}, overlayMaps2, {collapsed: false}).addTo(map);
+				
+				// ADD GROUPEDLAYERS CONTROL
+				var groupedOverlays = {
+				  "Time-enabled layers": {
+					'<span>Curing</span>': CFA_CuringMap_not_td,
+					"<span>GFDI hourly</span>": idv71122_vic_gfdi_td_layer,
+					"<span>MaxFDI daily</span>": idv71116_vic_maxfdi_td_layer,
+					"<span>MaxGFDI daily</span>": idv71123_vic_maxgfdi_td_layer,
+					"<span>MaxFFDI daily</span>": idv71118_vic_maxffdi_td_layer
+				  },
+				  "overlays": {
+					'<span>idv71122_vic_gfdi_wms_layer_not_td</span>': idv71122_vic_gfdi_wms_layer_not_td,
+					'<span>BOM District</span>': CFA_BOM_DIST,					
+					"<span>CFA_CuringMap_AGOL</span>": CFA_CuringMap_AGOL
+				  }
+				};
+					
+				/* Larger screens get expanded layer control and visible sidebar */
+				if (document.body.clientWidth <= 767) {
+				  var isCollapsed = true;
+				} else {
+				  var isCollapsed = false;
+				}
+				groupedLayerControl = L.control.groupedLayers(baseLayers, groupedOverlays, {
+				  collapsed: isCollapsed
+				}).addTo(map);
+				
+				// ADD SCALE CONTROL
+				L.control.scale().addTo(map);		
+
+				
+				// ADD LEGEND
+				var testLegend = L.control({
+					position: 'topright'
+				});
+				
+				//
+				CFA_CuringMap_not_td.on("add",function(){
+					
+					testLegend.onAdd = function(map) {
+						var src = wmsUrl + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetLegendGraphic&LAYER=gc:VISCA4eMapVG94&FORMAT=image/png";
+						var div = L.DomUtil.create('div', 'info legend');
+						div.innerHTML +=
+							'<b>Legend</b><br><img src="' + src + '" alt="legend">';
+						return div;
+					};
+					testLegend.addTo(map);
+				});
+				CFA_CuringMap_not_td.on("remove ",function(){
+					testLegend.onRemove = function(map) {
+						console.log("onRemove curing");
+					};
+					testLegend.remove();
+				});
+				
+				//
+				idv71122_vic_gfdi_td_layer.on("add",function(){
+					
+					testLegend.onAdd = function(map) {
+						var src = wmsUrl + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetLegendGraphic&LAYER=fdi:IDV71122_VIC_GFDI_SFC&FORMAT=image/png";
+						var div = L.DomUtil.create('div', 'info legend');
+						div.innerHTML +=
+							'<b>Legend</b><br><img src="' + src + '" alt="legend">';
+						return div;
+					};
+					timeDimensionCtrl.addTo(map);
+					testLegend.addTo(map);
+				});
+				idv71122_vic_gfdi_td_layer.on("remove ",function(){
+					testLegend.onRemove = function(map) {
+						console.log("onRemove gfdi");
+					};
+					testLegend.remove();
+					timeDimensionCtrl.remove();
+				});
+				
+				//
+				idv71116_vic_maxfdi_td_layer.on("add",function(){
+					
+					testLegend.onAdd = function(map) {
+						var src = wmsUrl + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetLegendGraphic&LAYER=fdi:IDV71116_VIC_MaxFDI_SFC&FORMAT=image/png";
+						var div = L.DomUtil.create('div', 'info legend');
+						div.innerHTML +=
+							'<b>Legend</b><br><img src="' + src + '" alt="legend">';
+						return div;
+					};
+					
+					timeDimensionCtrl.addTo(map);
+					testLegend.addTo(map);
+				});
+				idv71116_vic_maxfdi_td_layer.on("remove ",function(){
+					testLegend.onRemove = function(map) {
+						console.log("onRemove maxfdi");
+					};
+					testLegend.remove();
+					timeDimensionCtrl.remove();
+				});
+				
+				//
+				idv71123_vic_maxgfdi_td_layer.on("add",function(){
+					
+					testLegend.onAdd = function(map) {
+						var src = wmsUrl + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetLegendGraphic&LAYER=fdi:IDV71123_VIC_MaxGFDI_SFC&FORMAT=image/png";
+						var div = L.DomUtil.create('div', 'info legend');
+						div.innerHTML +=
+							'<b>Legend</b><br><img src="' + src + '" alt="legend">';
+						return div;
+					};
+					timeDimensionCtrl.addTo(map);
+					testLegend.addTo(map);
+				});
+				idv71123_vic_maxgfdi_td_layer.on("remove ",function(){
+					testLegend.onRemove = function(map) {
+						console.log("onRemove maxgfdi");
+					};
+					testLegend.remove();
+					timeDimensionCtrl.remove();
+				});
+				
+				//
+				idv71118_vic_maxffdi_td_layer.on("add",function(){
+					
+					testLegend.onAdd = function(map) {
+						var src = wmsUrl + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetLegendGraphic&LAYER=fdi:IDV71118_VIC_MaxFFDI_SFC&FORMAT=image/png";
+						var div = L.DomUtil.create('div', 'info legend');
+						div.innerHTML +=
+							'<b>Legend</b><br><img src="' + src + '" alt="legend">';
+						return div;
+					};
+					timeDimensionCtrl.addTo(map);
+					testLegend.addTo(map);
+					
+					if (map.hasLayer(this))
+						console.log(this);
+				});
+				idv71118_vic_maxffdi_td_layer.on("remove ",function(){
+					testLegend.onRemove = function(map) {
+						console.log("onRemove maxffdi");
+					};
+					testLegend.remove();
+					timeDimensionCtrl.remove();
+					
+					if (!map.hasLayer(this))
+						console.log("has no layer idv71118_vic_maxffdi_td_layer");
+				});
+				
+				$( "#butGetLayer" ).click(function() {
+					let i = 0;
+					map.eachLayer(function(){ i += 1; });
+					console.log('Map has', i, 'layers.');
+					
+					var layers = [];
+					map.eachLayer(function(layer) {
+						if( layer instanceof L.TileLayer.BetterWMS ) {
+							layers.push(layer);
+							console.log(layer);
+						}
+					});
+					console.log(layers.length);
+					
+					console.log(groupedLayerControl._layers);
+					jQuery.each( groupedLayerControl._layers, function( i, val ) {
+						if (val.layer instanceof L.TimeDimension.Layer.WMS && map.hasLayer(val.layer)) {
+							console.log("***" + i);
+							console.log(val.layer);
+						}
+					});
+					
+					
+					
+					//console.log(layerControl1.getActiveOverlays());
+				});
+				
+				var instance = $('.panel').lobiPanel({
+					//Options go here
+					"bodyHeight": 400,
+					"bodyWidth": 100,
+					"state": "unpinned"
+				});
+			});
+		</script>
+    </head>
+    <body>
+		<button id='butGetLayer' type="button">Get Layer</button> 
+        <div id="map" style="height: 100%; width: 100%"></div>
+		<div class="panel panel-default">
+			<div class="panel-heading">
+				<div class="panel-title">
+					<h4>Panel title</h4>
+				</div>
+			</div>
+			<div class="panel-body">
+				Lorem ipsum...
+			</div>
+		</div>
+    </body>
+</html>
